@@ -40,7 +40,7 @@ export const register: RequestHandler = async (req: Request, res: Response) => {
 
     // Create associated record
     if (role === 'JOBSEEKER') {
-      await prisma.jobseeker.create({ data: { jobseeker_user_id: user.user_id, jobseeker_full_name: fullName } });
+      await prisma.jobseeker.create({ data: { jobseeker_user_id: user.user_id} });
     } else if (role === 'EMPLOYER') {
       await prisma.employer.create({ data: { employer_user_id: user.user_id, employer_company_name: fullName } });
     }

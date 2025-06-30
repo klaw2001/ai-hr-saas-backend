@@ -23,8 +23,8 @@ model user {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  jobseeker jobseeker?
-  employer  employer?
+  jobseeker        jobseeker?
+  employer         employer?
 }
 
 model job {
@@ -47,6 +47,8 @@ model job {
   is_active  Boolean  @default(true)
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
+  created_by String?  @db.VarChar(255)
+  updated_by String?  @db.VarChar(255)
 
   employer     employer      @relation(fields: [job_employer_id], references: [employer_id])
   applications application[]
@@ -75,10 +77,10 @@ model job_type {
 }
 
 model application {
-  application_id           Int    @id @default(autoincrement())
+  application_id           Int     @id @default(autoincrement())
   application_job_id       Int
   application_jobseeker_id Int
-  application_status       String @default("PENDING")
+  application_status       String  @default("PENDING")
   application_message      String?
   application_resume_url   String?
 
@@ -86,26 +88,26 @@ model application {
   applied_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
+  created_by String? @db.VarChar(255)
+  updated_by String? @db.VarChar(255)
+
   job       job       @relation(fields: [application_job_id], references: [job_id])
   jobseeker jobseeker @relation(fields: [application_jobseeker_id], references: [jobseeker_id])
 }
 
 model jobseeker {
-  jobseeker_id               Int      @id @default(autoincrement())
-  jobseeker_user_id          Int      @unique
-  jobseeker_full_name        String
-  jobseeker_phone            String?
-  jobseeker_email            String?
-  jobseeker_resume_url       String?
-  jobseeker_skills           String[] // PostgreSQL Array
-  jobseeker_experience_years Int?
-  jobseeker_bio              String?
-  is_active                  Boolean  @default(true)
-  created_at                 DateTime @default(now())
-  updated_at                 DateTime @updatedAt
+  jobseeker_id      Int      @id @default(autoincrement())
+  jobseeker_user_id Int      @unique
+  is_active         Boolean  @default(true)
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+  created_by        String?  @db.VarChar(255)
+  updated_by        String?  @db.VarChar(255)
 
-  user        user          @relation(fields: [jobseeker_user_id], references: [user_id])
-  application application[]
+  user             user               @relation(fields: [jobseeker_user_id], references: [user_id])
+  application      application[]
+  u_profile        u_profile[]
+  u_qualifications u_qualifications[]
 }
 
 model employer {
@@ -121,4 +123,212 @@ model employer {
 
   user user  @relation(fields: [employer_user_id], references: [user_id])
   job  job[]
+}
+
+// --------------------------- Profile -----------------------------------------------
+model u_profile {
+  up_id         Int      @id @default(autoincrement())
+  jobseeker_id  Int      @unique
+  up_first_name String?  @db.Text
+  up_last_name  String?  @db.Text
+  up_email      String?  @db.Text
+  up_phone      String?  @db.Text
+  up_address    String?  @db.Text
+  up_country_id Int?     @db.Integer
+  up_state_id   Int?     @db.Integer
+  up_city_id    Int?     @db.Integer
+  up_area_id    Int?     @db.Integer
+  up_zip_code   String?  @db.Text
+  up_resume_url String?  @db.Text
+  up_bio        String?  @db.Text
+  is_active     Boolean  @default(true)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+  created_by    String?  @db.Text
+  updated_by    String?  @db.Text
+
+  jobseeker jobseeker @relation(fields: [jobseeker_id], references: [jobseeker_id])
+}
+
+// --------------------------- Qualifications -----------------------------------------------
+model u_qualifications {
+  uq_id               Int      @id @default(autoincrement())
+  jobseeker_id        Int      @unique
+  uq_recent_job_title String?   @db.Text
+  uq_recent_company   String?  @db.Text
+  is_active           Boolean  @default(true)
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  uq_jobseeker_id jobseeker @relation(fields: [jobseeker_id], references: [jobseeker_id])
+
+  uq_educations     u_educations[]
+  uq_skills         u_skills[]
+  uq_certifications u_certifications[]
+  uq_languages      u_languages[]
+  uq_licenses       u_licenses[]
+}
+
+model u_educations {
+  ue_id                 Int       @id @default(autoincrement())
+  ue_jobseeker_id       Int
+  uq_id                 Int?
+  ue_level_of_education String?   @db.Text
+  ue_field_of_study     String?   @db.Text
+  ue_uni_name           String?   @db.Text
+  ue_start_date         DateTime? @db.Date
+  ue_end_date           DateTime? @db.Date
+  is_active             Boolean   @default(true)
+  created_at            DateTime  @default(now())
+  updated_at            DateTime  @updatedAt
+
+  u_qualifications u_qualifications? @relation(fields: [uq_id], references: [uq_id])
+}
+
+model u_skills {
+  us_id                  Int               @id @default(autoincrement())
+  us_jobseeker_id        Int
+  uq_id                  Int?
+  us_skill               String            @db.Text
+  us_years_of_experience Int?              @db.Integer
+  is_active              Boolean           @default(true)
+  created_at             DateTime          @default(now())
+  updated_at             DateTime          @updatedAt
+  u_qualifications       u_qualifications? @relation(fields: [uq_id], references: [uq_id])
+}
+
+model u_certifications {
+  uc_id            Int               @id @default(autoincrement())
+  uc_jobseeker_id  Int
+  uq_id            Int?
+  uc_cert_name     String?           @db.Text
+  uc_cert_url      String?           @db.Text
+  uc_expiration    DateTime?         @db.Date
+  is_expired       Boolean           @default(false)
+  is_active        Boolean           @default(true)
+  created_at       DateTime          @default(now())
+  updated_at       DateTime          @updatedAt
+  u_qualifications u_qualifications? @relation(fields: [uq_id], references: [uq_id])
+}
+
+model u_licenses {
+  ulc_id           Int               @id @default(autoincrement())
+  ulc_jobseeker_id Int
+  uq_id            Int?
+  ulc_license_name String?           @db.Text
+  ulc_license_url  String?           @db.Text
+  ulc_expiration   DateTime?         @db.Date
+  is_expired       Boolean           @default(false)
+  is_active        Boolean           @default(true)
+  created_at       DateTime          @default(now())
+  updated_at       DateTime          @updatedAt
+  u_qualifications u_qualifications? @relation(fields: [uq_id], references: [uq_id])
+}
+
+model u_languages {
+  ul_id            Int                   @id @default(autoincrement())
+  ul_jobseeker_id  Int
+  uq_id            Int?
+  ul_language_name String?               @db.Text
+  ul_proficiency   language_proficiency?
+  is_active        Boolean               @default(true)
+  created_at       DateTime              @default(now())
+  updated_at       DateTime              @updatedAt
+  u_qualifications u_qualifications?     @relation(fields: [uq_id], references: [uq_id])
+}
+
+// --------------------------- Job Preferences -----------------------------------------------
+
+model u_job_preferences {
+  ujp_id                 Int  @id @default(autoincrement())
+  ujp_jobseeker_id       Int
+  ujp_base_pay_per_year  Int? @db.Integer
+  ujp_base_pay_per_month Int? @db.Integer
+
+  jobTypes         u_job_preference_types[]
+  preferredDays    u_job_preference_days[]
+  preferredShifts  u_job_preference_shifts[]
+  relocationCities u_relocation_cities[]
+
+  // fields for relocation
+  is_willing_to_relocate Boolean @default(false)
+  relocate_anywhere      Boolean @default(false)
+
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+}
+
+model u_job_preference_types {
+  id            Int               @id @default(autoincrement())
+  job_type      job_types
+  preference_id Int
+  preference    u_job_preferences @relation(fields: [preference_id], references: [ujp_id])
+
+  @@unique([job_type, preference_id])
+}
+
+model u_job_preference_days {
+  id            Int               @id @default(autoincrement())
+  day           work_days
+  preference_id Int
+  preference    u_job_preferences @relation(fields: [preference_id], references: [ujp_id])
+
+  @@unique([day, preference_id])
+}
+
+model u_job_preference_shifts {
+  id            Int               @id @default(autoincrement())
+  shift         work_shifts
+  preference_id Int
+  preference    u_job_preferences @relation(fields: [preference_id], references: [ujp_id])
+
+  @@unique([shift, preference_id])
+}
+
+model u_relocation_cities {
+  id            Int               @id @default(autoincrement())
+  city_id       Int
+  city_name     String?
+  preference_id Int
+  preference    u_job_preferences @relation(fields: [preference_id], references: [ujp_id])
+
+  @@unique([city_name, preference_id])
+}
+
+// --------------------------- Enums -----------------------------------------------
+enum language_proficiency {
+  beginner
+  intermediate
+  expert
+  fluent
+  native
+}
+
+enum job_types {
+  full_time
+  permanent
+  fresher
+  part_time
+  internship
+  contractual
+  freelance
+  volunteer
+}
+
+enum work_days {
+  monday_to_friday
+  weekend_availability
+  weekend_only
+}
+
+enum work_shifts {
+  day_shift
+  morning_shift
+  rotational_shift
+  night_shift
+  evening_shift
+  fixed_shift
+  us_shift
+  uk_shift
 }

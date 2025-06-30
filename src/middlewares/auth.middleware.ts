@@ -9,16 +9,16 @@ interface JwtPayload {
   user_role: string; // make sure Role is imported
 }
 
-// declare global {
-//   namespace Express {
-//     interface Request {
-//       user?: {
-//         user_id: number;
-//         user_role: string; // or user_role: Role if you use the enum
-//       };
-//     }
-//   }
-// }
+declare global {
+  namespace Express {
+    interface Request {
+      user?: {
+        user_id: number;
+        user_role: string; // or user_role: Role if you use the enum
+      };
+    }
+  }
+}
 
 export const authenticate = (req: Request, res: Response, next: NextFunction) => {
   try {
