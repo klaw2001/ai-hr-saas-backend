@@ -1,8 +1,16 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { sendResponse } from "../helpers/ResponseService";
+import { OpenAI } from "openai";
+import path from "path";
+import fs from "fs";
+import ejs from "ejs";
+import { Readable } from "stream";
 
 const prisma = new PrismaClient();
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 export const getJobseekerApplications = async (req: Request, res: Response) => {
   try {
@@ -384,3 +392,259 @@ export const addLanguage = async (req: Request, res: Response) => {
 };
 
 //-----------------------------------------Profile Ends-------------------------------------
+import type { NextFunction } from "express";
+import puppeteer from "puppeteer";
+
+export const generateResume = async (
+  req: Request,
+  res: Response,
+  _next?: NextFunction
+): Promise<void> => {
+  try {
+
+    const { prompt } = req.body;
+
+    if (!prompt) {
+      return sendResponse(res, false, null, "Prompt is required.", 400);
+    }
+
+    const systemPrompt = `
+You are a resume generator assistant.
+
+Strictly follow these instructions:
+- Only extract and use the data provided in the user's prompt.
+- Do NOT assume or fabricate any information.
+- If the prompt does not mention something (e.g. a project, certification), leave that field empty or as an empty list.
+- Respond ONLY with a valid JSON object using this exact format:
+
+{
+  "full_name": "",
+  "job_title": "",
+  "email": "",
+  "phone": "",
+  "location": "",
+  "summary": "",
+  "experience": [
+    {
+      "company": "",
+      "duration": "",
+      "description": ""
+    }
+  ],
+  "projects": [
+    {
+      "name": "",
+      "description": "",
+      "link": ""
+    }
+  ],
+  "education": [
+    {
+      "institution": "",
+      "duration": "",
+      "course": ""
+    }
+  ],
+  "skills": [""],
+  "certifications": [""]
+}
+
+Only return valid JSON. Do not include explanations or extra commentary.
+`;
+
+    
+    const chatCompletion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.7,
+    });
+
+    const responseText = chatCompletion.choices[0].message.content || '';
+
+    let resumeJson: any;
+    try {
+      // Remove ```json and ``` if present
+      const cleaned = responseText
+        .replace(/^```json\s*/i, '') // remove starting ```json (case insensitive)
+        .replace(/```$/, '') // remove ending ```
+        .trim();
+    
+      resumeJson = JSON.parse(cleaned);
+    } catch (error) {
+      console.error("Invalid JSON from GPT:", responseText);
+      return sendResponse(
+        res,
+        false,
+        null,
+        "Failed to parse resume data from AI.",
+        500
+      );
+    }
+
+    let resumeData;
+    try {
+      const cleanedText = responseText?.trim().match(/\{[\s\S]*\}/)?.[0];
+      if (!cleanedText) throw new Error("No JSON object found");
+
+      resumeData = JSON.parse(cleanedText);
+    } catch (error) {
+      console.error("Invalid JSON from GPT:", responseText);
+      return sendResponse(
+        res,
+        false,
+        null,
+        "Failed to parse resume data from AI.",
+        500
+      );
+    }
+
+    const templatePath = path.join(__dirname, '../../views/resume.ejs');
+    const html = await ejs.renderFile(templatePath, resumeData);
+
+    // Stream the HTML as a response
+    // const stream = Readable.from(String(html));
+    // res.setHeader('Content-Type', 'text/html');
+    // stream.pipe(res);
+    res.json({
+      html,
+      resume: resumeJson,
+    });
+
+  } catch (error) {
+    console.error("Resume generation error:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+};
+
+export const updateResumeSection = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { section, prompt, currentResume } = req.body;
+
+    if (!section || !prompt || !currentResume) {
+      return sendResponse(res, false, null, 'Missing required fields.', 400);
+    }
+
+    const systemPrompt = `
+You are a resume assistant.
+
+Your task is to ONLY update the "${section}" section of the resume.
+
+Follow these rules strictly:
+- Do NOT modify any other section.
+- Do NOT wrap the response in "div", "section", or other keys.
+- ONLY return valid JSON in the exact format:
+{
+  "${section}": [...]
+}
+(Use object instead of array for sections like "summary", if applicable)
+
+DO NOT include explanations, markdown, or formatting like \`\`\`.
+Only valid JSON.
+`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: JSON.stringify(currentResume) },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.5,
+    });
+
+    const rawContent = completion.choices[0].message.content || '';
+
+    // Clean triple backtick wrapper if present
+    const cleaned = rawContent
+      .replace(/^```json\s*/i, '')
+      .replace(/```$/, '')
+      .trim();
+
+    let updateJson: any;
+
+    try {
+      const parsed = JSON.parse(cleaned);
+
+      // Handle wrong nesting: e.g. { div: { projects: [...] } }
+      if (parsed[section]) {
+        updateJson = parsed;
+      } else if (parsed.div?.[section]) {
+        updateJson = { [section]: parsed.div[section] };
+      } else if (parsed.section?.[section]) {
+        updateJson = { [section]: parsed.section[section] };
+      } else {
+        throw new Error(`Section "${section}" not found in GPT response`);
+      }
+    } catch (err) {
+      console.error('Invalid JSON from GPT during section update:', rawContent);
+      return sendResponse(res, false, null, 'Failed to parse updated section from GPT.', 500);
+    }
+
+    const mergedResume = {
+      ...currentResume,
+      [section]: updateJson[section],
+    };
+
+    const templatePath = path.join(__dirname, '../../views/resume.ejs');
+    const html = await ejs.renderFile(templatePath, mergedResume);
+
+    const stream = Readable.from(String(html));
+    res.setHeader('Content-Type', 'text/html');
+    stream.pipe(res);
+  } catch (error) {
+    console.error('[Update Resume Section Error]', error);
+    return sendResponse(res, false, null, 'Internal server error while updating resume section.', 500);
+  }
+};
+
+
+export const downloadResume = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { resumeJson } = req.body;
+
+    if (!resumeJson) {
+      return sendResponse(res, false, null, 'resumeJson not provided in request body.', 400);
+    }
+
+    // Step 1: Render HTML from EJS template
+    const templatePath = path.join(__dirname, '../../views/resume.ejs');
+    const html: any = await ejs.renderFile(templatePath, resumeJson);
+
+    // Step 2: Launch Puppeteer and render PDF
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+
+    const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
+    await browser.close();
+
+    if (!pdfBuffer || pdfBuffer.length === 0) {
+      throw new Error('Generated PDF buffer is empty.');
+    }
+
+    // Step 3: Save PDF to public/uploads/resumes/
+    const resumeDir = path.join(__dirname, '../../public/uploads/resumes');
+    if (!fs.existsSync(resumeDir)) {
+      fs.mkdirSync(resumeDir, { recursive: true });
+    }
+
+    const timestamp = new Date().toISOString().replace(/[-:.TZ]/g, '');
+    const fileName = `resume-${timestamp}.pdf`;
+    const filePath = path.join(resumeDir, fileName);
+    fs.writeFileSync(filePath, pdfBuffer);
+
+    // Step 4: Return file path in response (relative to /public)
+    const publicUrl = `/uploads/resumes/${fileName}`;
+    return sendResponse(res, true, { file: publicUrl }, 'Resume PDF generated successfully');
+  } catch (error: any) {
+    console.error('[PDF Download Error]:', error.message || error);
+    return sendResponse(res, false, null, 'Failed to generate PDF.', 500);
+  }
+};

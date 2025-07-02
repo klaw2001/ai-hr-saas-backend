@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { sendResponse } from '../helpers/ResponseService';
+import axios from 'axios';
 
 const prisma = new PrismaClient();
 
@@ -132,6 +133,22 @@ export const getJobsByEmployer = async (req: Request, res: Response) => {
     sendResponse(res, true, jobs, 'Jobs fetched for employer.');
   } catch (err) {
     console.error('Get Employer Jobs Error:', err);
+    sendResponse(res, false, null, 'Internal server error.', 500);
+  }
+};
+
+export const allJobs = async (req: Request, res: Response) => {
+  try {
+   const response = await axios.get('https://jobs.indianapi.in/jobs?limit=10' , {
+    headers: {
+      'X-Api-Key': `${process.env.INDIAN_API_KEY}`
+    }
+   })
+
+   console.log(response);
+   sendResponse(res, true, response.data, 'Jobs fetched successfully.');
+  } catch (err) {
+    console.error('Get All Jobs Error:', err);
     sendResponse(res, false, null, 'Internal server error.', 500);
   }
 };

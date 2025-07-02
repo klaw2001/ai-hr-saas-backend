@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title><%= full_name %> - Resume</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; color: #333; }
+    h1, h2 { color: #2c3e50; }
+    .section { margin-top: 30px; }
+    ul { padding-left: 20px; }
+    li { margin-bottom: 8px; }
+    .contact, .skills, .certifications { margin-top: 15px; }
+  </style>
+</head>
+<body>
+
+  <h1><%= full_name %></h1>
+  <h2><%= job_title %></h2>
+
+  <div class="contact">
+    <p><strong>Email:</strong> <%= email %></p>
+    <p><strong>Phone:</strong> <%= phone %></p>
+    <p><strong>Location:</strong> <%= location %></p>
+  </div>
+
+  <div class="section summary" data-section="summary">
+    <h2>Summary</h2>
+    <p><%= summary %></p>
+  </div>
+
+  <div class="section experience" data-section="experience" >
+    <h2>Professional Experience</h2>
+    <ul>
+      <% experience.forEach(exp => { %>
+        <li>
+          <strong><%= exp.company %></strong> | <%= exp.duration %><br />
+          <%= exp.description %>
+        </li>
+      <% }) %>
+    </ul>
+  </div>
+
+  <div class="section projects" data-section="projects">
+    <h2>Projects</h2>
+    <ul>
+      <% projects.forEach(project => { %>
+        <li>
+          <strong><%= project.name %></strong>: <%= project.description %><br />
+          <a href="<%= project.link %>"><%= project.link %></a>
+        </li>
+      <% }) %>
+    </ul>
+  </div>
+
+  <div class="section education" data-section="education">
+    <h2>Education</h2>
+    <ul>
+      <% education.forEach(edu => { %>
+        <li>
+          <strong><%= edu.institution %></strong> (<%= edu.duration %>)<br />
+          <%= edu.course %>
+        </li>
+      <% }) %>
+    </ul>
+  </div>
+
+  <div class="section skills" data-section="skills">
+    <h2>Skills</h2>
+    <ul>
+      <% skills.forEach(skill => { %>
+        <li><%= skill %></li>
+      <% }) %>
+    </ul>
+  </div>
+
+  <div class="section certifications" data-section="certifications">
+    <h2>Certifications</h2>
+    <ul>
+      <% certifications.forEach(cert => { %>
+        <li><%= cert %></li>
+      <% }) %>
+    </ul>
+  </div>
+
+</body>
+</html>

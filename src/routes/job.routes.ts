@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createJob, getAllJobs, getJobById, getJobsByEmployer } from '../controllers/job.controller';
+import { allJobs, createJob, getAllJobs, getJobById, getJobsByEmployer } from '../controllers/job.controller';
 
 const router = Router();
 
@@ -7,6 +7,7 @@ const router = Router();
 router.post('/employer/create-job', createJob);
 router.get('/', getAllJobs);
 router.get('/employer/:employerId', getJobsByEmployer);
-router.get('/:jobId', getJobById);
+router.get('/single/:jobId', getJobById);
+router.get('/all-jobs', allJobs);
 
 export default router;
