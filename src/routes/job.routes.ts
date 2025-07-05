@@ -8,6 +8,6 @@ router.post('/employer/create-job', createJob);
 router.get('/', getAllJobs);
 router.get('/employer/:employerId', getJobsByEmployer);
 router.get('/single/:jobId', getJobById);
-router.get('/all-jobs', allJobs);
+router.post('/all-jobs', allJobs);
 
 export default router;
