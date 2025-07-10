@@ -6,6 +6,114 @@ import axios from "axios";
 const prisma = new PrismaClient();
 
 // Create a job
+// JOB CREATION
+// This endpoint allows employers to create a new job listing.
+// export const createJob = async (req: Request, res: Response) => {
+//   try {
+//     const {
+//       job_title,
+//       job_description,
+//       job_location,
+//       job_category_id,
+//       job_type_id,
+//       job_city,
+//       job_state,
+//       job_country,
+//       job_salary,
+//       job_remote,
+//       job_tags,
+//       job_seniority,
+//       employment_type,
+//       job_url,
+//       job_hash,
+//       company_id,
+//       company_name,
+//       company_url,
+//       job_company_website,
+//       job_industry_collection, // should be array of strings
+//       applicants_count,
+//       linkedin_job_id,
+//       application_active,
+//       deleted
+//     } = req.body;
+
+//     const employerUserId = req.user?.user_id; // JWT middleware adds req.user
+
+//     // Required fields based on updated schema
+//     if (
+//       !job_title ||
+//       !job_description ||
+//       !job_location ||
+//       !job_category_id ||
+//       !job_type_id
+//     ) {
+//       return sendResponse(
+//         res,
+//         false,
+//         null,
+//         "Title, description, location, job_category_id, and job_type_id are required.",
+//         400
+//       );
+//     }
+
+//     if (!employerUserId) {
+//       return sendResponse(
+//         res,
+//         false,
+//         null,
+//         "Employer user ID is required.",
+//         400
+//       );
+//     }
+
+//     // Find employer_id from user_id
+//     const employer = await prisma.employer.findUnique({
+//       where: { employer_user_id: employerUserId },
+//       select: { employer_id: true },
+//     });
+
+//     if (!employer) {
+//       return sendResponse(res, false, null, "Employer not found.", 404);
+//     }
+
+//     const job = await prisma.job.create({
+//       data: {
+//         job_title,
+//         job_description,
+//         job_location,
+//         job_category: { connect: { job_category_id: Number(job_category_id) } },
+//         job_type: { connect: { job_type_id: Number(job_type_id) } },
+//         job_city: job_city || null,
+//         job_state: job_state || null,
+//         job_country: job_country || null,
+//         job_salary: job_salary || null,
+//         job_remote: typeof job_remote === "boolean" ? job_remote : null,
+//         job_tags: Array.isArray(job_tags) ? job_tags : [],
+//         employer: { connect: { employer_id: employer.employer_id } },
+//         is_active: true,
+//         job_seniority: job_seniority || null,
+//         employment_type: employment_type || null,
+//         job_url: job_url || null,
+//         job_hash: job_hash || null,
+//         company_id: company_id ? Number(company_id) : null,
+//         company_name: company_name || null,
+//         company_url: company_url || null,
+//         job_company_website: job_company_website || null,
+//         job_industry_collection: Array.isArray(job_industry_collection) ? job_industry_collection : [],
+//         applicants_count: applicants_count || null,
+//         linkedin_job_id: linkedin_job_id ? Number(linkedin_job_id) : null,
+//         application_active: typeof application_active === "boolean" ? application_active : true,
+//         deleted: typeof deleted === "boolean" ? deleted : false,
+//       },
+//     });
+
+//     sendResponse(res, true, job, "Job created successfully.", 201);
+//   } catch (err) {
+//     console.error("Create Job Error:", err);
+//     sendResponse(res, false, null, "Internal server error.", 500);
+//   }
+// };
+
 export const createJob = async (req: Request, res: Response) => {
   try {
     const {
@@ -20,11 +128,22 @@ export const createJob = async (req: Request, res: Response) => {
       job_salary,
       job_remote,
       job_tags,
+      job_seniority,
+      employment_type,
+      job_url,
+      job_hash,
+      company_id,
+      company_name,
+      company_url,
+      job_company_website,
+      job_industry_collection, // should be array of strings
+      applicants_count,
+      linkedin_job_id,
+      application_active,
+      deleted
     } = req.body;
 
-    const employerUserId = req.user?.user_id; // JWT middleware adds req.user
-
-    // Required fields based on updated schema
+    // Required fields check
     if (
       !job_title ||
       !job_description ||
@@ -41,62 +160,64 @@ export const createJob = async (req: Request, res: Response) => {
       );
     }
 
-    if (!employerUserId) {
-      return sendResponse(
-        res,
-        false,
-        null,
-        "Employer user ID is required.",
-        400
-      );
-    }
-
-    // Find employer_id from user_id
-    const employer = await prisma.employer.findUnique({
-      where: { employer_user_id: employerUserId },
-      select: { employer_id: true },
-    });
-
-    if (!employer) {
-      return sendResponse(res, false, null, "Employer not found.", 404);
-    }
-
     const job = await prisma.job.create({
       data: {
-        job_title: job_title,
-        job_description: job_description,
-        job_location: job_location,
-        job_category: { connect: { job_category_id: Number(job_category_id) } },
-        job_type: { connect: { job_type_id: Number(job_type_id) } },
+        job_title,
+        job_description,
+        job_location,
+        // job_category: { connect: { job_category_id: Number(job_category_id) } },
+        // job_type: { connect: { job_type_id: Number(job_type_id) } },
         job_city: job_city || null,
         job_state: job_state || null,
         job_country: job_country || null,
         job_salary: job_salary || null,
         job_remote: typeof job_remote === "boolean" ? job_remote : null,
         job_tags: Array.isArray(job_tags) ? job_tags : [],
-        employer: { connect: { employer_id: employer.employer_id } },
         is_active: true,
+        job_seniority: job_seniority || null,
+        employment_type: employment_type || null,
+        job_url: job_url || null,
+        job_hash: job_hash || null,
+        company_id: company_id ? Number(company_id) : null,
+        company_name: company_name || null,
+        company_url: company_url || null,
+        job_company_website: job_company_website || null,
+        job_industry_collection: Array.isArray(job_industry_collection) ? job_industry_collection : [],
+        applicants_count: applicants_count || null,
+        linkedin_job_id: linkedin_job_id,
+        application_active: typeof application_active === "boolean" ? application_active : true,
+        deleted: typeof deleted === "boolean" ? deleted : false,
       },
     });
 
-    sendResponse(res, true, job, "Job created successfully.", 201);
+    sendResponse(res, true, null, "Job created successfully.", 201);
   } catch (err) {
     console.error("Create Job Error:", err);
     sendResponse(res, false, null, "Internal server error.", 500);
   }
 };
 
+
+
 // Get all jobs (public)
 export const getAllJobs = async (req: Request, res: Response) => {
+  const user_id = req.user?.user_id // JWT middleware adds req.user
   try {
     const jobs = await prisma.job.findMany({
-      where: { is_active: true },
       include: {
-        employer: {
-          select: { employer_id: true, user: { select: { user_email: true } } },
+        jobs_shortlisted: {
+          where: { jobseeker_id: user_id }, // Filter by logged-in jobseeker
+          select: { jobseeker_id: true },
         },
       },
+      where: { is_active: true },
+      // include: {
+      //   employer: {
+      //     select: { employer_id: true, user: { select: { user_email: true } } },
+      //   },
+      // },
     });
+   
     sendResponse(res, true, jobs, "Jobs fetched successfully.");
   } catch (err) {
     console.error("Get All Jobs Error:", err);
@@ -257,3 +378,4 @@ export const allJobs = async (req: Request, res: Response) => {
     sendResponse(res, false, null, "Internal server error.", 500);
   }
 };
+

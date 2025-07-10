@@ -23,18 +23,31 @@ model user {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  jobseeker        jobseeker?
-  employer         employer?
+  jobseeker jobseeker?
+  employer  employer?
 }
 
 model job {
-  job_id          Int    @id @default(autoincrement())
-  job_title       String
-  job_description String
-  job_location    String
+  job_id                  Int      @id @default(autoincrement())
+  job_title               String
+  job_description         String
+  job_location            String
+  job_seniority           String? // e.g., "Mid-Senior level"
+  employment_type         String? // e.g., "Full-time"
+  job_url                 String? // LinkedIn or external job URL
+  job_hash                String? // unique hash from source
+  company_id              Int?
+  company_name            String?
+  company_url             String?
+  job_company_website     String?
+  job_industry_collection String[] // store as array of industries
+  applicants_count        String? // e.g., "Be among the first 25 applicants"
+  linkedin_job_id         String?
+  application_active      Boolean? @default(true)
+  deleted                 Boolean? @default(false)
 
-  job_category_id Int
-  job_type_id     Int
+  job_category_id Int?
+  job_type_id     Int?
   job_city        String? // optional granularity
   job_state       String? // optional granularity
   job_country     String? // optional granularity
@@ -42,7 +55,7 @@ model job {
   job_remote      Boolean? // true if remote job
   job_tags        String[] // for filters/search – e.g., ["react", "nodejs"]
 
-  job_employer_id Int
+  job_employer_id Int?
 
   is_active  Boolean  @default(true)
   created_at DateTime @default(now())
@@ -50,10 +63,28 @@ model job {
   created_by String?  @db.VarChar(255)
   updated_by String?  @db.VarChar(255)
 
-  employer     employer      @relation(fields: [job_employer_id], references: [employer_id])
-  applications application[]
-  job_category job_category  @relation(fields: [job_category_id], references: [job_category_id])
-  job_type     job_type      @relation(fields: [job_type_id], references: [job_type_id])
+  employer         employer?          @relation(fields: [job_employer_id], references: [employer_id])
+  applications     application[]
+  job_category     job_category?      @relation(fields: [job_category_id], references: [job_category_id])
+  job_type         job_type?          @relation(fields: [job_type_id], references: [job_type_id])
+  jobs_shortlisted jobs_shortlisted[]
+}
+
+model jobs_shortlisted {
+  job_shortlisted_id         Int     @id @default(autoincrement())
+  job_id                     Int
+  jobseeker_id               Int
+  job_shortlisted_resume_url String?
+
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  created_by String? @db.VarChar(255)
+  updated_by String? @db.VarChar(255)
+
+  job       job       @relation(fields: [job_id], references: [job_id])
+  jobseeker jobseeker @relation(fields: [jobseeker_id], references: [jobseeker_id])
 }
 
 model job_category {
@@ -108,6 +139,7 @@ model jobseeker {
   application      application[]
   u_profile        u_profile[]
   u_qualifications u_qualifications[]
+  jobs_shortlisted jobs_shortlisted[]
 }
 
 model employer {
@@ -154,7 +186,7 @@ model u_profile {
 model u_qualifications {
   uq_id               Int      @id @default(autoincrement())
   jobseeker_id        Int      @unique
-  uq_recent_job_title String?   @db.Text
+  uq_recent_job_title String?  @db.Text
   uq_recent_company   String?  @db.Text
   is_active           Boolean  @default(true)
   created_at          DateTime @default(now())

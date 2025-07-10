@@ -11,14 +11,14 @@ const router = Router();
 
 // ✅ Public Routes
 router.use('/auth', authRoutes);
-router.use('/jobs', jobRoutes);
+// router.use('/jobs', jobRoutes);
 // ✅ Authenticated Routes
-// router.use('/jobs', authenticate, authorize(['EMPLOYER']), jobRoutes);
+router.use('/jobs', authenticate, authorize(['JOBSEEKER']), jobRoutes);
 
 
 // ✅ Jobseeker Routes
-// router.use('/jobseeker', authenticate, authorize(['JOBSEEKER']), jobseekerRoutes);
-router.use('/jobseeker', jobseekerRoutes);
+router.use('/jobseeker', authenticate, authorize(['JOBSEEKER']), jobseekerRoutes);
+// router.use('/jobseeker', jobseekerRoutes);
 
 // ✅ Employer Routes
 router.use('/employer', authenticate, authorize(['EMPLOYER']), employerRoutes);

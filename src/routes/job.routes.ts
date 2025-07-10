@@ -4,7 +4,7 @@ import { allJobs, createJob, getAllJobs, getJobById, getJobsByEmployer } from '.
 const router = Router();
 
 // Authenticated routes
-router.post('/employer/create-job', createJob);
+router.post('/create-job', createJob);
 router.get('/', getAllJobs);
 router.get('/employer/:employerId', getJobsByEmployer);
 router.get('/single/:jobId', getJobById);

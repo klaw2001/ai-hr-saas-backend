@@ -13,6 +13,8 @@ import {
   generateResume,
   updateResumeSection,
   downloadResume,
+  shortlistJob,
+  getShortlistedJobs,
 } from '../controllers/jobseeker.controller';
 
 const router = Router();
@@ -38,9 +40,10 @@ router.post('/profile/download-resume', downloadResume);
 
 // ---------------------------------------Resume Routes-------------------------------------
 
-
-
-
+// Shortlist a job
+router.post('/shortlist', shortlistJob);
+// Get all shortlisted jobs for the logged-in jobseeker
+router.get('/shortlisted', getShortlistedJobs);
 
 
 export default router;

@@ -648,3 +648,53 @@ export const downloadResume = async (req: Request, res: Response): Promise<void>
     return sendResponse(res, false, null, 'Failed to generate PDF.', 500);
   }
 };
+
+// ------------------- Shortlist Jobs -------------------
+export const shortlistJob = async (req: Request, res: Response) => {
+  try {
+    const user_id = req.user?.user_id;
+    const { job_id } = req.body;
+    if (!user_id || !job_id) {
+      return sendResponse(res, false, null, "User ID and job ID are required.", 400);
+    }
+
+    // Check if already shortlisted
+    const existing = await prisma.jobs_shortlisted.findFirst({
+      where: {
+        jobseeker_id: user_id,
+        job_id: job_id,
+      },
+    });
+    if (existing) {
+      return sendResponse(res, false, null, "Job already shortlisted.", 400);
+    }
+
+    const shortlist = await prisma.jobs_shortlisted.create({
+      data: {
+        jobseeker_id: user_id,
+        job_id: job_id,
+      },
+    });
+    return sendResponse(res, true, shortlist, "Job shortlisted successfully");
+  } catch (err) {
+    console.error(err);
+    sendResponse(res, false, null, "Internal server error", 500);
+  }
+};
+
+export const getShortlistedJobs = async (req: Request, res: Response) => {
+  try {
+    const user_id = req.user?.user_id;
+    if (!user_id) {
+      return sendResponse(res, false, null, "User ID is required.", 400);
+    }
+    const shortlisted = await prisma.jobs_shortlisted.findMany({
+      where: { jobseeker_id: user_id },
+      include: { job: true },
+    });
+    return sendResponse(res, true, shortlisted, "Shortlisted jobs fetched successfully");
+  } catch (err) {
+    console.error(err);
+    sendResponse(res, false, null, "Internal server error", 500);
+  }
+};
