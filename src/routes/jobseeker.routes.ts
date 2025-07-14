@@ -17,6 +17,7 @@ import {
   getShortlistedJobs,
   upsertJobseekerProfile,
   getJobseekerProfileById,
+  viewAppliedJobs,
 } from '../controllers/jobseeker.controller';
 
 const router = Router();
@@ -24,6 +25,7 @@ const router = Router();
 
 router.get('/applications', getJobseekerApplications);
 router.post('/apply', applyJob);
+router.get('/applied-jobs', viewAppliedJobs);
 
 
 // ---------------------------------------Profile Routes-------------------------------------
@@ -49,7 +51,7 @@ router.get('/shortlisted', getShortlistedJobs);
 
 // New jobseeker_profile routes
 router.post('/profile/upsert', upsertJobseekerProfile);
-router.get('/profile/:jobseekerId', getJobseekerProfileById);
-
+router.get('/profile', getJobseekerProfileById);
+router.post('/apply-job', applyJob);
 
 export default router;

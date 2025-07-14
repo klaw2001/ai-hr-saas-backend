@@ -31,59 +31,45 @@ export const getJobseekerApplications = async (req: Request, res: Response) => {
 
 export const applyJob = async (req: Request, res: Response) => {
   try {
-    const user_id = req.user?.user_id;
-    if (!user_id) {
-      return sendResponse(res, false, null, "User ID is required.", 400);
+    const { job_id, jobseeker_id } = req.body;
+
+    // Validate input
+    if (!job_id || !jobseeker_id) {
+      return sendResponse(res, false, null, "job_id and jobseeker_id are required.", 400);
     }
-    const { job_id, application_message, application_resume_url } = req.body;
 
     // Check if job exists
     const job = await prisma.job.findUnique({
       where: { job_id: job_id },
     });
-
     if (!job) {
-      return sendResponse(res, false, null, "Job not found", 404);
+      return sendResponse(res, false, null, "Job not found.", 404);
     }
 
-    // Check if already applied
+    // Check for existing application
     const existingApplication = await prisma.application.findFirst({
       where: {
-        application_jobseeker_id: user_id,
         application_job_id: job_id,
+        application_jobseeker_id: jobseeker_id,
       },
     });
-
     if (existingApplication) {
-      return sendResponse(
-        res,
-        false,
-        null,
-        "You have already applied to this job",
-        400
-      );
+      return sendResponse(res, false, null, "You have already applied to this job.", 409);
     }
 
-    // Create application
+    // Create new application
     const application = await prisma.application.create({
       data: {
-        application_jobseeker_id: user_id,
         application_job_id: job_id,
-        application_message,
-        application_resume_url,
-        application_status: "PENDING", // or whatever default status
+        application_jobseeker_id: jobseeker_id,
+        application_status: "PENDING", // or your default status
       },
     });
 
-    sendResponse(
-      res,
-      true,
-      application,
-      "Job application submitted successfully"
-    );
+    return sendResponse(res, true, { application_id: application.application_id }, "Job applied successfully.", 201);
   } catch (err) {
-    console.error(err);
-    sendResponse(res, false, null, "Internal server error", 500);
+    console.error("[Apply Job Error]", err);
+    return sendResponse(res, false, null, "Internal server error.", 500);
   }
 };
 
@@ -813,7 +799,7 @@ export const upsertJobseekerProfile = async (req: Request, res: Response) => {
 
 export const getJobseekerProfileById = async (req: Request, res: Response) => {
   try {
-    const jobseekerId = Number(req.params.jobseekerId);
+    const jobseekerId = req.user?.user_id;
     
     if (!jobseekerId || isNaN(jobseekerId)) {
       return sendResponse(res, false, null, "Valid jobseeker ID is required.", 400);
@@ -843,5 +829,71 @@ export const getJobseekerProfileById = async (req: Request, res: Response) => {
   } catch (err) {
     console.error("Get Jobseeker Profile Error:", err);
     sendResponse(res, false, null, "Internal server error.", 500);
+  }
+};
+
+export const viewAppliedJobs = async (req: Request, res: Response) => {
+  try {
+    const jobseeker_id = Number(req.query.jobseeker_id);
+    const search = (req.query.search as string) || '';
+    const page = Number(req.query.page) > 0 ? Number(req.query.page) : 1;
+    const limit = Number(req.query.limit) > 0 ? Number(req.query.limit) : 10;
+    const skip = (page - 1) * limit;
+
+    if (!jobseeker_id || isNaN(jobseeker_id)) {
+      return sendResponse(res, false, null, 'Valid jobseeker_id is required.', 400);
+    }
+
+    // Build job filter
+    const jobFilter: any = {};
+    if (search) {
+      jobFilter.job_title = { contains: search, mode: 'insensitive' };
+    }
+
+    // Find applications with job info
+    const [total, applications] = await Promise.all([
+      prisma.application.count({
+        where: {
+          application_jobseeker_id: jobseeker_id,
+          job: jobFilter,
+        },
+      }),
+      prisma.application.findMany({
+        where: {
+          application_jobseeker_id: jobseeker_id,
+          job: jobFilter,
+        },
+        include: {
+          job: {
+            select: {
+              job_id: true,
+              job_title: true,
+              job_location: true,
+            },
+          },
+        },
+        orderBy: { applied_at: 'desc' },
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    const results = applications.map(app => ({
+      job_id: app.job?.job_id,
+      job_title: app.job?.job_title,
+      location: app.job?.job_location,
+      application_date: app.applied_at,
+    }));
+
+    return sendResponse(res, true, {
+      jobs: results,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    }, 'Applied jobs fetched successfully.');
+  } catch (err) {
+    console.error('[View Applied Jobs Error]', err);
+    return sendResponse(res, false, null, 'Internal server error.', 500);
   }
 };
