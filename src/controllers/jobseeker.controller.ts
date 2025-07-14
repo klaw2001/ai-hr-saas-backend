@@ -391,7 +391,7 @@ export const addLanguage = async (req: Request, res: Response) => {
   }
 };
 
-//-----------------------------------------Profile Ends-------------------------------------
+// //-----------------------------------------Profile Ends-------------------------------------
 import type { NextFunction } from "express";
 import puppeteer from "puppeteer";
 
@@ -696,5 +696,152 @@ export const getShortlistedJobs = async (req: Request, res: Response) => {
   } catch (err) {
     console.error(err);
     sendResponse(res, false, null, "Internal server error", 500);
+  }
+};
+
+// New jobseeker_profile endpoints
+export const upsertJobseekerProfile = async (req: Request, res: Response) => {
+  try {
+    const user_id = req.user?.user_id;
+    if (!user_id) {
+      return sendResponse(res, false, null, "User ID is required.", 400);
+    }
+
+    // Find jobseeker_id from user_id
+    const jobseeker = await prisma.jobseeker.findUnique({
+      where: { jobseeker_user_id: user_id },
+      select: { jobseeker_id: true },
+    });
+
+    if (!jobseeker) {
+      return sendResponse(res, false, null, "Jobseeker not found.", 404);
+    }
+
+    const {
+      profile_logo,
+      full_name,
+      job_title,
+      phone,
+      email,
+      website,
+      current_salary,
+      expected_salary,
+      experience,
+      age,
+      education_level,
+      languages,
+      categories,
+      allow_in_listing,
+      description,
+      facebook_link,
+      twitter_link,
+      linkedin_link,
+      google_plus_link,
+      country,
+      city,
+      complete_address,
+      map_address,
+      latitude,
+      longitude,
+    } = req.body;
+
+    const profile = await prisma.jobseeker_profile.upsert({
+      where: { jobseeker_id: jobseeker.jobseeker_id },
+      update: {
+        profile_logo,
+        full_name,
+        job_title,
+        phone,
+        email,
+        website,
+        current_salary,
+        expected_salary,
+        experience,
+        age,
+        education_level,
+        languages,
+        categories: Array.isArray(categories) ? categories : [],
+        allow_in_listing,
+        description,
+        facebook_link,
+        twitter_link,
+        linkedin_link,
+        google_plus_link,
+        country,
+        city,
+        complete_address,
+        map_address,
+        latitude,
+        longitude,
+      },
+      create: {
+        jobseeker_id: jobseeker.jobseeker_id,
+        profile_logo,
+        full_name,
+        job_title,
+        phone,
+        email,
+        website,
+        current_salary,
+        expected_salary,
+        experience,
+        age,
+        education_level,
+        languages,
+        categories: Array.isArray(categories) ? categories : [],
+        allow_in_listing,
+        description,
+        facebook_link,
+        twitter_link,
+        linkedin_link,
+        google_plus_link,
+        country,
+        city,
+        complete_address,
+        map_address,
+        latitude,
+        longitude,
+      },
+    });
+
+    sendResponse(res, true, profile, "Profile updated successfully.");
+  } catch (err) {
+    console.error("Upsert Jobseeker Profile Error:", err);
+    sendResponse(res, false, null, "Internal server error.", 500);
+  }
+};
+
+export const getJobseekerProfileById = async (req: Request, res: Response) => {
+  try {
+    const jobseekerId = Number(req.params.jobseekerId);
+    
+    if (!jobseekerId || isNaN(jobseekerId)) {
+      return sendResponse(res, false, null, "Valid jobseeker ID is required.", 400);
+    }
+
+    const profile = await prisma.jobseeker_profile.findUnique({
+      where: { jobseeker_id: jobseekerId },
+      include: {
+        jobseeker: {
+          select: {
+            jobseeker_id: true,
+            user: {
+              select: {
+                user_email: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!profile) {
+      return sendResponse(res, false, null, "Profile not found.", 404);
+    }
+
+    sendResponse(res, true, profile, "Profile fetched successfully.");
+  } catch (err) {
+    console.error("Get Jobseeker Profile Error:", err);
+    sendResponse(res, false, null, "Internal server error.", 500);
   }
 };

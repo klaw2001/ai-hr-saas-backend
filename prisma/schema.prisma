@@ -140,6 +140,42 @@ model jobseeker {
   u_profile        u_profile[]
   u_qualifications u_qualifications[]
   jobs_shortlisted jobs_shortlisted[]
+  jobseeker_profile jobseeker_profile?
+}
+
+model jobseeker_profile {
+  jobseeker_profile_id Int      @id @default(autoincrement())
+  jobseeker_id         Int      @unique
+  profile_logo         String?
+  full_name            String?
+  job_title            String?
+  phone                String?
+  email                String?
+  website              String?
+  current_salary       String?
+  expected_salary      String?
+  experience           String?
+  age                  String?
+  education_level      String?
+  languages            String?
+  categories           String[]
+  allow_in_listing     Boolean?
+  description          String?
+  facebook_link        String?
+  twitter_link         String?
+  linkedin_link        String?
+  google_plus_link     String?
+  country              String?
+  city                 String?
+  complete_address     String?
+  map_address          String?
+  latitude             String?
+  longitude            String?
+  is_active            Boolean  @default(true)
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+
+  jobseeker jobseeker @relation(fields: [jobseeker_id], references: [jobseeker_id])
 }
 
 model employer {
