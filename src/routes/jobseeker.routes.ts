@@ -18,6 +18,7 @@ import {
   upsertJobseekerProfile,
   getJobseekerProfileById,
   viewAppliedJobs,
+  scoreResume,
 } from '../controllers/jobseeker.controller';
 
 const router = Router();
@@ -41,6 +42,7 @@ router.post('/profile',addProfile);
 router.post('/profile/generate-resume', generateResume);
 router.post('/profile/update-resume-section', updateResumeSection);
 router.post('/profile/download-resume', downloadResume);
+router.post('/profile/score-resume', scoreResume);
 
 // ---------------------------------------Resume Routes-------------------------------------
 

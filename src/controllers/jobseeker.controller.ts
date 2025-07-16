@@ -6,6 +6,7 @@ import path from "path";
 import fs from "fs";
 import ejs from "ejs";
 import { Readable } from "stream";
+import { logResumeAIPrompt, updateResumeAIPromptLog } from '../services/resumeaiPromptLog.service';
 
 const prisma = new PrismaClient();
 const openai = new OpenAI({
@@ -14,7 +15,7 @@ const openai = new OpenAI({
 
 export const getJobseekerApplications = async (req: Request, res: Response) => {
   try {
-    const user_id = req.user?.user_id;
+    const user_id = Number(req.user?.user_id);
     const applications = await prisma.application.findMany({
       where: { application_jobseeker_id: user_id },
       include: {
@@ -387,12 +388,20 @@ export const generateResume = async (
   _next?: NextFunction
 ): Promise<void> => {
   try {
+    const user_id = Number(req.user?.user_id);
+    const jobseeker_id = undefined; // req.user does not have jobseeker_id
+    const prompt = req.body.prompt;
+    const model_used = 'gpt-4o';
+    const prompt_type = 'full_resume';
 
-    const { prompt } = req.body;
-
-    if (!prompt) {
-      return sendResponse(res, false, null, "Prompt is required.", 400);
-    }
+    // 1. Log the prompt before sending to GPT
+    const promptLog = await logResumeAIPrompt({
+      user_id,
+      jobseeker_id,
+      prompt_text: prompt,
+      prompt_type,
+      model_used,
+    });
 
     const systemPrompt = `
 You are a resume generator assistant.
@@ -413,6 +422,7 @@ Strictly follow these instructions:
   "experience": [
     {
       "company": "",
+
       "duration": "",
       "description": ""
     }
@@ -438,29 +448,49 @@ Strictly follow these instructions:
 Only return valid JSON. Do not include explanations or extra commentary.
 `;
 
-    
-    const chatCompletion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: prompt },
-      ],
-      temperature: 0.7,
+    let gpt_response = '';
+    let status = 'completed';
+    let error_message = '';
+    let chatCompletion;
+    try {
+      chatCompletion = await openai.chat.completions.create({
+        model: model_used,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.7,
+      });
+      gpt_response = chatCompletion.choices[0].message.content || '';
+    } catch (error: any) {
+      status = 'error';
+      error_message = error.message || 'Unknown error';
+    }
+
+    // 2. Update the log with the response or error
+    await updateResumeAIPromptLog({
+      log_id: promptLog.resumeai_prompt_log_id,
+      gpt_response,
+      status,
+      error_message,
+      model_used,
     });
 
-    const responseText = chatCompletion.choices[0].message.content || '';
+    if (status === 'error') {
+      return sendResponse(res, false, null, error_message, 500);
+    }
 
     let resumeJson: any;
     try {
       // Remove ```json and ``` if present
-      const cleaned = responseText
+      const cleaned = gpt_response
         .replace(/^```json\s*/i, '') // remove starting ```json (case insensitive)
         .replace(/```$/, '') // remove ending ```
         .trim();
     
       resumeJson = JSON.parse(cleaned);
     } catch (error) {
-      console.error("Invalid JSON from GPT:", responseText);
+      console.error("Invalid JSON from GPT:", gpt_response);
       return sendResponse(
         res,
         false,
@@ -472,12 +502,12 @@ Only return valid JSON. Do not include explanations or extra commentary.
 
     let resumeData;
     try {
-      const cleanedText = responseText?.trim().match(/\{[\s\S]*\}/)?.[0];
+      const cleanedText = gpt_response?.trim().match(/\{[\s\S]*\}/)?.[0];
       if (!cleanedText) throw new Error("No JSON object found");
 
       resumeData = JSON.parse(cleanedText);
     } catch (error) {
-      console.error("Invalid JSON from GPT:", responseText);
+      console.error("Invalid JSON from GPT:", gpt_response);
       return sendResponse(
         res,
         false,
@@ -497,6 +527,7 @@ Only return valid JSON. Do not include explanations or extra commentary.
     res.json({
       html,
       resume: resumeJson,
+      log_id: promptLog.resumeai_prompt_log_id,
     });
 
   } catch (error) {
@@ -507,11 +538,24 @@ Only return valid JSON. Do not include explanations or extra commentary.
 
 export const updateResumeSection = async (req: Request, res: Response): Promise<void> => {
   try {
+    const user_id = Number(req.user?.user_id);
+    const jobseeker_id = undefined; // req.user does not have jobseeker_id
     const { section, prompt, currentResume } = req.body;
+    const model_used = 'gpt-4o';
+    const prompt_type = `section_${section}`;
 
     if (!section || !prompt || !currentResume) {
       return sendResponse(res, false, null, 'Missing required fields.', 400);
     }
+
+    // 1. Log the prompt before sending to GPT
+    const promptLog = await logResumeAIPrompt({
+      user_id,
+      jobseeker_id,
+      prompt_text: prompt,
+      prompt_type,
+      model_used,
+    });
 
     const systemPrompt = `
 You are a resume assistant.
@@ -531,20 +575,41 @@ DO NOT include explanations, markdown, or formatting like \`\`\`.
 Only valid JSON.
 `;
 
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: JSON.stringify(currentResume) },
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.5,
+    let gpt_response = '';
+    let status = 'completed';
+    let error_message = '';
+    let completion;
+    try {
+      completion = await openai.chat.completions.create({
+        model: model_used,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: JSON.stringify(currentResume) },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.5,
+      });
+      gpt_response = completion.choices[0].message.content || '';
+    } catch (error: any) {
+      status = 'error';
+      error_message = error.message || 'Unknown error';
+    }
+
+    // 2. Update the log with the response or error
+    await updateResumeAIPromptLog({
+      log_id: promptLog.resumeai_prompt_log_id,
+      gpt_response,
+      status,
+      error_message,
+      model_used,
     });
 
-    const rawContent = completion.choices[0].message.content || '';
+    if (status === 'error') {
+      return sendResponse(res, false, null, error_message, 500);
+    }
 
     // Clean triple backtick wrapper if present
-    const cleaned = rawContent
+    const cleaned = gpt_response
       .replace(/^```json\s*/i, '')
       .replace(/```$/, '')
       .trim();
@@ -565,7 +630,7 @@ Only valid JSON.
         throw new Error(`Section "${section}" not found in GPT response`);
       }
     } catch (err) {
-      console.error('Invalid JSON from GPT during section update:', rawContent);
+      console.error('Invalid JSON from GPT during section update:', gpt_response);
       return sendResponse(res, false, null, 'Failed to parse updated section from GPT.', 500);
     }
 
@@ -635,6 +700,65 @@ export const downloadResume = async (req: Request, res: Response): Promise<void>
   }
 };
 
+export const scoreResume = async (req: Request, res: Response) => {
+  try {
+   const log_id = req.body.log_id;
+    // Fetch the log entry
+    const log = await prisma.resumeai_prompt_log.findFirst({
+      where: { resumeai_prompt_log_id: log_id },
+    });
+
+
+    if (!log || !log.gpt_response) {
+      return sendResponse(res, false, null, "Resume not found for scoring", 404);
+    }
+
+    // If you store HTML, use log.gpt_response (or log.html if you add that field)
+    const resumeContent = log.gpt_response;
+
+    // Compose the scoring prompt
+    const scoringPrompt = `
+You are a resume reviewer for software engineering jobs.
+Given the following resume, score it from 1 to 10 (10 = excellent, 1 = poor).
+Provide a JSON response: { "score": <number>, "reason": "<short explanation>" }
+Resume:
+${resumeContent}
+`;
+
+    // Call GPT
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: "You are a helpful assistant." },
+        { role: "user", content: scoringPrompt },
+      ],
+      temperature: 0.2,
+    });
+
+    const gptResult = completion.choices[0].message.content || "";
+    let score = null, reason = "";
+    try {
+      const parsed = JSON.parse(
+        gptResult.replace(/^```json\s*/i, "").replace(/```$/, "").trim()
+      );
+      score = parsed.score;
+      reason = parsed.reason;
+    } catch (err) {
+      return sendResponse(res, false, null, "Failed to parse GPT score.", 500);
+    }
+
+    // Optionally, update the log with the score
+    await prisma.resumeai_prompt_log.update({
+      where: { resumeai_prompt_log_id: log.resumeai_prompt_log_id },
+      data: { resume_score: score, resume_score_reason: reason },
+    });
+
+    return sendResponse(res, true, { score, reason }, "Resume scored successfully.");
+  } catch (err) {
+    console.error("[Score Resume Error]", err);
+    return sendResponse(res, false, null, "Internal server error.", 500);
+  }
+};
 // ------------------- Shortlist Jobs -------------------
 export const shortlistJob = async (req: Request, res: Response) => {
   try {
@@ -834,13 +958,13 @@ export const getJobseekerProfileById = async (req: Request, res: Response) => {
 
 export const viewAppliedJobs = async (req: Request, res: Response) => {
   try {
-    const jobseeker_id = Number(req.query.jobseeker_id);
+    const jobseeker_id = Number(req.user?.user_id);
     const search = (req.query.search as string) || '';
     const page = Number(req.query.page) > 0 ? Number(req.query.page) : 1;
     const limit = Number(req.query.limit) > 0 ? Number(req.query.limit) : 10;
     const skip = (page - 1) * limit;
 
-    if (!jobseeker_id || isNaN(jobseeker_id)) {
+    if (!jobseeker_id) {
       return sendResponse(res, false, null, 'Valid jobseeker_id is required.', 400);
     }
 

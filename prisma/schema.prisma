@@ -25,6 +25,7 @@ model user {
 
   jobseeker jobseeker?
   employer  employer?
+  resumeai_prompt_logs resumeai_prompt_log[]
 }
 
 model job {
@@ -141,6 +142,7 @@ model jobseeker {
   u_qualifications u_qualifications[]
   jobs_shortlisted jobs_shortlisted[]
   jobseeker_profile jobseeker_profile?
+  resumeai_prompt_logs resumeai_prompt_log[]
 }
 
 model jobseeker_profile {
@@ -399,4 +401,28 @@ enum work_shifts {
   fixed_shift
   us_shift
   uk_shift
+}
+
+model resumeai_prompt_log {
+  resumeai_prompt_log_id Int      @id @default(autoincrement())
+  user_id                Int
+  jobseeker_id           Int?
+  prompt_text            String
+  gpt_response           String?
+  prompt_type            String? // e.g., "resume_section", "full_resume"
+  status                 String  @default("completed") // e.g., "pending", "completed", "error"
+  model_used             String?
+  error_message          String?
+  resume_score           Int?
+  resume_score_reason    String?
+  is_active              Boolean  @default(true)
+  created_at             DateTime @default(now())
+  updated_at             DateTime @updatedAt
+
+  // Relations
+  user      user      @relation(fields: [user_id], references: [user_id])
+  jobseeker jobseeker? @relation(fields: [jobseeker_id], references: [jobseeker_id])
+
+  @@index([user_id])
+  @@index([jobseeker_id])
 }
