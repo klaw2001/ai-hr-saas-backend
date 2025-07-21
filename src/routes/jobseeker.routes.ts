@@ -19,6 +19,8 @@ import {
   getJobseekerProfileById,
   viewAppliedJobs,
   scoreResume,
+  resetJobseekerPassword,
+  generateResumeArray,
 } from '../controllers/jobseeker.controller';
 
 const router = Router();
@@ -40,6 +42,7 @@ router.post('/profile/language',addLanguage)
 router.post('/profile',addProfile);
 
 router.post('/profile/generate-resume', generateResume);
+router.post('/profile/generate-resume-array', generateResumeArray);
 router.post('/profile/update-resume-section', updateResumeSection);
 router.post('/profile/download-resume', downloadResume);
 router.post('/profile/score-resume', scoreResume);
@@ -55,5 +58,6 @@ router.get('/shortlisted', getShortlistedJobs);
 router.post('/profile/upsert', upsertJobseekerProfile);
 router.get('/profile', getJobseekerProfileById);
 router.post('/apply-job', applyJob);
+router.post('/profile/reset-password', resetJobseekerPassword);
 
 export default router;

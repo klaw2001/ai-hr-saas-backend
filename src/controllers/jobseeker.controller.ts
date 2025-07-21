@@ -13,6 +13,8 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+import bcrypt from 'bcrypt';
+
 export const getJobseekerApplications = async (req: Request, res: Response) => {
   try {
     const user_id = Number(req.user?.user_id);
@@ -381,7 +383,6 @@ export const addLanguage = async (req: Request, res: Response) => {
 // //-----------------------------------------Profile Ends-------------------------------------
 import type { NextFunction } from "express";
 import puppeteer from "puppeteer";
-
 export const generateResume = async (
   req: Request,
   res: Response,
@@ -533,6 +534,124 @@ Only return valid JSON. Do not include explanations or extra commentary.
   } catch (error) {
     console.error("Resume generation error:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+};
+
+export const generateResumeArray = async (
+  req: Request,
+  res: Response,
+  _next?: NextFunction
+): Promise<void> => {
+  try {
+    const user_id = Number(req.user?.user_id);
+    const jobseeker_id = undefined;
+    const prompt = req.body.prompt;
+    const model_used = 'gpt-4o';
+    const prompt_type = 'full_resume_array';
+
+    const promptLog = await logResumeAIPrompt({
+      user_id,
+      jobseeker_id,
+      prompt_text: prompt,
+      prompt_type,
+      model_used,
+    });
+
+    const systemPrompt = `
+You are a resume generator assistant.
+
+Your task is to extract resume information from the user's prompt and return it as a single JSON object inside an array, using the following schema exactly:
+
+[
+  {
+    "full_name": "",
+    "job_title": "",
+    "email": "",
+    "phone": "",
+    "location": "",
+    "summary": "",
+    "experience": [
+      {
+        "company": "",
+        "duration": "",
+        "description": ""
+      }
+    ],
+    "projects": [
+      {
+        "name": "",
+        "description": "",
+        "link": ""
+      }
+    ],
+    "education": [
+      {
+        "institution": "",
+        "duration": "",
+        "course": ""
+      }
+    ],
+    "skills": [""],
+    "certifications": [""]
+  }
+]
+
+Strict instructions:
+- Use only the information provided in the prompt. Do NOT assume or fabricate missing details.
+- If fields like skills, education, projects, or certifications are clearly mentioned in the prompt, they MUST be extracted and filled.
+- If a section is not mentioned in the user input, leave it as an empty list.
+- Output ONLY valid JSON. No comments, no markdown, no extra explanation.
+`;
+
+
+    let gpt_response = '';
+    let status = 'completed';
+    let error_message = '';
+    let chatCompletion;
+
+    try {
+      chatCompletion = await openai.chat.completions.create({
+        model: model_used,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.7,
+      });
+
+    console.dir(chatCompletion, { depth: null });
+      gpt_response = chatCompletion.choices[0].message.content || '';
+    } catch (error: any) {
+      status = 'error';
+      error_message = error.message || 'Unknown error';
+    }
+
+    await updateResumeAIPromptLog({
+      log_id: promptLog.resumeai_prompt_log_id,
+      gpt_response,
+      status,
+      error_message,
+      model_used,
+    });
+
+    if (status === 'error') {
+      return sendResponse(res, false, null, error_message, 500);
+    }
+
+    let resumeArray: any = null;
+    try {
+      const cleaned = gpt_response?.trim().match(/\[[\s\S]*\]/)?.[0];
+      if (!cleaned) throw new Error("No JSON array found");
+      resumeArray = JSON.parse(cleaned);
+    } catch (err) {
+      console.error("Invalid JSON from GPT:", gpt_response);
+      return sendResponse(res, false, null, "Failed to parse resume data from AI.", 500);
+    }
+
+    return sendResponse(res, true, { resume: resumeArray[0], log_id: promptLog.resumeai_prompt_log_id }, "Resume generated successfully");
+  } catch (error) {
+    console.error("Resume generation error:", error);
+   return sendResponse(res, false, null, "Resume generation error", 500);
   }
 };
 
@@ -1018,6 +1137,57 @@ export const viewAppliedJobs = async (req: Request, res: Response) => {
     }, 'Applied jobs fetched successfully.');
   } catch (err) {
     console.error('[View Applied Jobs Error]', err);
+    return sendResponse(res, false, null, 'Internal server error.', 500);
+  }
+};
+
+export const resetJobseekerPassword = async (req: Request, res: Response) => {
+  try {
+    const user_id = req.user?.user_id;
+    if (!user_id) {
+      return sendResponse(res, false, null, 'Unauthorized', 401);
+    }
+
+    const { oldPassword, newPassword, confirmPassword } = req.body;
+
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      return sendResponse(res, false, null, 'All password fields are required.', 400);
+    }
+
+    if (newPassword !== confirmPassword) {
+      return sendResponse(res, false, null, 'New passwords do not match.', 400);
+    }
+
+    // Fetch jobseeker
+    const jobseeker = await prisma.user.findUnique({
+      where: { user_id },
+      select: { user_password: true },
+    });
+
+    if (!jobseeker || !jobseeker.user_password) {
+      return sendResponse(res, false, null, 'Jobseeker not found.', 404);
+    }
+
+    // Check old password
+    const isMatch = await bcrypt.compare(oldPassword, jobseeker.user_password);
+    if (!isMatch) {
+      return sendResponse(res, false, null, 'Old password is incorrect.', 400);
+    }
+
+    // Optionally: check password strength here
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password
+    await prisma.user.update({
+      where: { user_id },
+      data: { user_password: hashedPassword },
+    });
+
+    return sendResponse(res, true, null, 'Password updated successfully.');
+  } catch (err) {
+    console.error('[Reset Jobseeker Password Error]', err);
     return sendResponse(res, false, null, 'Internal server error.', 500);
   }
 };
