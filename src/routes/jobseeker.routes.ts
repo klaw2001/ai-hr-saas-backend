@@ -21,6 +21,7 @@ import {
   scoreResume,
   resetJobseekerPassword,
   generateResumeArray,
+  updateResumeObj,
 } from '../controllers/jobseeker.controller';
 
 const router = Router();
@@ -46,6 +47,7 @@ router.post('/profile/generate-resume-array', generateResumeArray);
 router.post('/profile/update-resume-section', updateResumeSection);
 router.post('/profile/download-resume', downloadResume);
 router.post('/profile/score-resume', scoreResume);
+router.post('/profile/save-resume', updateResumeObj);
 
 // ---------------------------------------Resume Routes-------------------------------------
 

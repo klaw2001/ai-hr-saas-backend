@@ -560,7 +560,7 @@ export const generateResumeArray = async (
     const systemPrompt = `
 You are a resume generator assistant.
 
-Your task is to extract resume information from the user's prompt and return it as a single JSON object inside an array, using the following schema exactly:
+Your job is to extract detailed resume information from the user's prompt and return it as a single JSON object inside an array. Use this exact schema:
 
 [
   {
@@ -596,11 +596,14 @@ Your task is to extract resume information from the user's prompt and return it 
   }
 ]
 
-Strict instructions:
-- Use only the information provided in the prompt. Do NOT assume or fabricate missing details.
-- If fields like skills, education, projects, or certifications are clearly mentioned in the prompt, they MUST be extracted and filled.
-- If a section is not mentioned in the user input, leave it as an empty list.
-- Output ONLY valid JSON. No comments, no markdown, no extra explanation.
+Instructions:
+- Use all the information provided in the user's prompt.
+- If a section (like experience, projects, certifications, etc.) is clearly mentioned in the prompt, extract it accurately.
+- If a section is **not mentioned at all**, insert a realistic, generic placeholder or dummy content so that the resume looks complete and professional.
+- The summary should always exist, even if basic.
+- All content should look natural and formatted as if coming from a real resume.
+- Do NOT fabricate personal data like name, email, or phone. Leave them empty if not mentioned.
+- Output only valid JSON. No markdown, no explanations, no comments.
 `;
 
 
@@ -619,7 +622,6 @@ Strict instructions:
         temperature: 0.7,
       });
 
-    console.dir(chatCompletion, { depth: null });
       gpt_response = chatCompletion.choices[0].message.content || '';
     } catch (error: any) {
       status = 'error';
@@ -658,7 +660,7 @@ Strict instructions:
 export const updateResumeSection = async (req: Request, res: Response): Promise<void> => {
   try {
     const user_id = Number(req.user?.user_id);
-    const jobseeker_id = undefined; // req.user does not have jobseeker_id
+    const jobseeker_id = undefined;
     const { section, prompt, currentResume } = req.body;
     const model_used = 'gpt-4o';
     const prompt_type = `section_${section}`;
@@ -667,7 +669,6 @@ export const updateResumeSection = async (req: Request, res: Response): Promise<
       return sendResponse(res, false, null, 'Missing required fields.', 400);
     }
 
-    // 1. Log the prompt before sending to GPT
     const promptLog = await logResumeAIPrompt({
       user_id,
       jobseeker_id,
@@ -679,42 +680,44 @@ export const updateResumeSection = async (req: Request, res: Response): Promise<
     const systemPrompt = `
 You are a resume assistant.
 
-Your task is to ONLY update the "${section}" section of the resume.
+Your task is to ONLY update the "${section}" section of the resume based on the user prompt.
 
-Follow these rules strictly:
-- Do NOT modify any other section.
-- Do NOT wrap the response in "div", "section", or other keys.
-- ONLY return valid JSON in the exact format:
+Strictly follow these rules:
+- Do NOT touch or mention any other section.
+- Return only valid JSON like:
 {
-  "${section}": [...]
+  "${section}": [...] // For sections like education, experience, skills
 }
-(Use object instead of array for sections like "summary", if applicable)
-
-DO NOT include explanations, markdown, or formatting like \`\`\`.
-Only valid JSON.
+OR
+{
+  "${section}": "" // For summary, job_title, etc.
+}
+- NO markdown, no explanations, no comments, no formatting like \`\`\`.
+- Preserve the structure of the current resume.
 `;
 
     let gpt_response = '';
     let status = 'completed';
     let error_message = '';
     let completion;
+
     try {
       completion = await openai.chat.completions.create({
         model: model_used,
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: JSON.stringify(currentResume) },
-          { role: 'user', content: prompt }
+          { role: 'user', content: `Current Resume: ${JSON.stringify(currentResume)}` },
+          { role: 'user', content: `User wants to update ${section}: ${prompt}` }
         ],
         temperature: 0.5,
       });
+
       gpt_response = completion.choices[0].message.content || '';
     } catch (error: any) {
       status = 'error';
       error_message = error.message || 'Unknown error';
     }
 
-    // 2. Update the log with the response or error
     await updateResumeAIPromptLog({
       log_id: promptLog.resumeai_prompt_log_id,
       gpt_response,
@@ -727,18 +730,16 @@ Only valid JSON.
       return sendResponse(res, false, null, error_message, 500);
     }
 
-    // Clean triple backtick wrapper if present
     const cleaned = gpt_response
       .replace(/^```json\s*/i, '')
       .replace(/```$/, '')
       .trim();
 
     let updateJson: any;
-
     try {
       const parsed = JSON.parse(cleaned);
 
-      // Handle wrong nesting: e.g. { div: { projects: [...] } }
+      // Normalize structure if wrapped incorrectly
       if (parsed[section]) {
         updateJson = parsed;
       } else if (parsed.div?.[section]) {
@@ -753,17 +754,23 @@ Only valid JSON.
       return sendResponse(res, false, null, 'Failed to parse updated section from GPT.', 500);
     }
 
+    // Merge updated section into the resume
     const mergedResume = {
       ...currentResume,
       [section]: updateJson[section],
     };
 
+    // Optionally render HTML via EJS (can be removed if returning only JSON)
     const templatePath = path.join(__dirname, '../../views/resume.ejs');
     const html = await ejs.renderFile(templatePath, mergedResume);
 
-    const stream = Readable.from(String(html));
-    res.setHeader('Content-Type', 'text/html');
-    stream.pipe(res);
+    // Send merged object + optionally HTML if you want
+    return sendResponse(res, true, {
+      resume: mergedResume,
+      updated_section: section,
+      html,
+      log_id: promptLog.resumeai_prompt_log_id,
+    }, `Resume section "${section}" updated successfully`);
   } catch (error) {
     console.error('[Update Resume Section Error]', error);
     return sendResponse(res, false, null, 'Internal server error while updating resume section.', 500);
@@ -1191,3 +1198,32 @@ export const resetJobseekerPassword = async (req: Request, res: Response) => {
     return sendResponse(res, false, null, 'Internal server error.', 500);
   }
 };
+
+export const updateResumeObj = async (req: Request, res: Response) => {
+  try {
+    const user_id = req.user?.user_id;
+    if (!user_id) {
+      return sendResponse(res, false, null, 'Unauthorized', 401);
+    }
+    const { resume_obj } = req.body;
+    const jobseeker_id = await prisma.jobseeker.findUnique({
+      where: { jobseeker_user_id: user_id },
+      select: { jobseeker_id: true },
+    });
+    if (!jobseeker_id) {
+      return sendResponse(res, false, null, 'Jobseeker not found.', 404);
+    } 
+    const resume = await prisma.jobseeker_profile.update({
+      where: { jobseeker_id: jobseeker_id.jobseeker_id },
+      data: { resume_obj },
+    });
+    return sendResponse(res, true, resume, 'Resume updated successfully.');
+  } catch (err) {
+    console.error('[Update Resume Obj Error]', err);  
+    return sendResponse(res, false, null, 'Internal server error.', 500);
+  }
+};
+
+
+
+

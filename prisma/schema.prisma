@@ -148,6 +148,7 @@ model jobseeker {
 model jobseeker_profile {
   jobseeker_profile_id Int      @id @default(autoincrement())
   jobseeker_id         Int      @unique
+  resume_obj           String?
   profile_logo         String?
   full_name            String?
   job_title            String?
