@@ -828,35 +828,22 @@ export const downloadResume = async (req: Request, res: Response): Promise<void>
 
 export const scoreResume = async (req: Request, res: Response) => {
   try {
-   const log_id = req.body.log_id;
-    // Fetch the log entry
-    const log = await prisma.resumeai_prompt_log.findFirst({
-      where: { resumeai_prompt_log_id: log_id },
-    });
-
-
-    if (!log || !log.gpt_response) {
-      return sendResponse(res, false, null, "Resume not found for scoring", 404);
-    }
-
-    // If you store HTML, use log.gpt_response (or log.html if you add that field)
-    const resumeContent = log.gpt_response;
-
+   const resumeJson = req.body.resumeJson;
     // Compose the scoring prompt
     const scoringPrompt = `
 You are a resume reviewer for software engineering jobs.
-Given the following resume, score it from 1 to 10 (10 = excellent, 1 = poor).
+Given the following resume, score it from 1 to 100 (100 = excellent, 1 = poor).
 Provide a JSON response: { "score": <number>, "reason": "<short explanation>" }
 Resume:
-${resumeContent}
+${JSON.stringify(resumeJson, null, 2)}
 `;
 
     // Call GPT
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
-        { role: "system", content: "You are a helpful assistant." },
-        { role: "user", content: scoringPrompt },
+        { role: "system", content: scoringPrompt },
+        { role: "user", content: JSON.stringify(resumeJson, null, 2) },
       ],
       temperature: 0.2,
     });
@@ -872,12 +859,6 @@ ${resumeContent}
     } catch (err) {
       return sendResponse(res, false, null, "Failed to parse GPT score.", 500);
     }
-
-    // Optionally, update the log with the score
-    await prisma.resumeai_prompt_log.update({
-      where: { resumeai_prompt_log_id: log.resumeai_prompt_log_id },
-      data: { resume_score: score, resume_score_reason: reason },
-    });
 
     return sendResponse(res, true, { score, reason }, "Resume scored successfully.");
   } catch (err) {

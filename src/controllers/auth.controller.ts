@@ -84,3 +84,23 @@ export const login: RequestHandler = async (req: Request, res: Response) => {
     sendResponse(res, false, null, 'Internal server error.', 500);
   }
 };
+
+export const refreshToken: RequestHandler = (req, res) => {
+  const { refreshToken } = req.body;
+  if (!refreshToken) {
+    return sendResponse(res, false, null, 'Refresh token is required.', 400);
+  }
+  try {
+    // Use a different secret or the same, but with a longer expiry for refresh tokens
+    const decoded = jwt.verify(refreshToken, JWT_SECRET) as any;
+    // Optionally, check token type or other claims
+    const accessToken = jwt.sign(
+      { user_id: decoded.user_id, user_role: decoded.user_role },
+      JWT_SECRET,
+      { expiresIn: '1d' }
+    );
+    return sendResponse(res, true, { token: accessToken }, 'Access token refreshed successfully.');
+  } catch (err) {
+    return sendResponse(res, false, null, 'Invalid or expired refresh token.', 401);
+  }
+};
