@@ -1186,7 +1186,7 @@ export const updateResumeObj = async (req: Request, res: Response) => {
     if (!user_id) {
       return sendResponse(res, false, null, 'Unauthorized', 401);
     }
-    const { resume_obj } = req.body;
+    const { resume_obj, jr_name, jr_score, jr_score_reason } = req.body;
     const jobseeker_id = await prisma.jobseeker.findUnique({
       where: { jobseeker_user_id: user_id },
       select: { jobseeker_id: true },
@@ -1194,9 +1194,14 @@ export const updateResumeObj = async (req: Request, res: Response) => {
     if (!jobseeker_id) {
       return sendResponse(res, false, null, 'Jobseeker not found.', 404);
     } 
-    const resume = await prisma.jobseeker_profile.update({
-      where: { jobseeker_id: jobseeker_id.jobseeker_id },
-      data: { resume_obj },
+    const resume = await prisma.jobseeker_resumes.create({
+      data: {
+        jobseeker_id: jobseeker_id.jobseeker_id,
+        jr_resume_obj: resume_obj,
+        jr_name,
+        jr_score,
+        jr_score_reason,
+      },
     });
     return sendResponse(res, true, resume, 'Resume updated successfully.');
   } catch (err) {
@@ -1205,6 +1210,122 @@ export const updateResumeObj = async (req: Request, res: Response) => {
   }
 };
 
+export const getSavedResumes = async (req: Request, res: Response) => {
+  try {
+    const user_id = req.user?.user_id;
+    if (!user_id) {
+      return sendResponse(res, false, null, 'Unauthorized', 401);
+    }
 
+    // Find jobseeker_id for the user
+    const jobseeker = await prisma.jobseeker.findUnique({
+      where: { jobseeker_user_id: user_id },
+      select: { jobseeker_id: true },
+    });
+
+    if (!jobseeker) {
+      return sendResponse(res, false, null, 'Jobseeker not found.', 404);
+    }
+
+    // Retrieve all saved resumes for the jobseeker
+    const resumes = await prisma.jobseeker_resumes.findMany({
+      where: { jobseeker_id: jobseeker.jobseeker_id },
+      orderBy: { created_at: 'desc' },
+    });
+
+    return sendResponse(res, true, resumes, 'Saved resumes retrieved successfully.');
+  } catch (err) {
+    console.error('[Get Saved Resumes Error]', err);
+    return sendResponse(res, false, null, 'Internal server error.', 500);
+  }
+};
+
+export const getSavedResumeById = async (req: Request, res: Response) => {
+  try {
+    const user_id = req.user?.user_id;
+    if (!user_id) {
+      return sendResponse(res, false, null, 'Unauthorized', 401);
+    }
+
+    const { jr_id } = req.params;
+    if (!jr_id) {
+      return sendResponse(res, false, null, 'Resume ID (jr_id) is required.', 400);
+    }
+
+    // Find jobseeker_id for the user
+    const jobseeker = await prisma.jobseeker.findUnique({
+      where: { jobseeker_user_id: user_id },
+      select: { jobseeker_id: true },
+    });
+
+    if (!jobseeker) {
+      return sendResponse(res, false, null, 'Jobseeker not found.', 404);
+    }
+
+    // Retrieve the specific resume by jr_id and jobseeker_id
+    const resume = await prisma.jobseeker_resumes.findFirst({
+      where: {
+        jr_id: Number(jr_id),
+        jobseeker_id: jobseeker.jobseeker_id,
+      },
+    });
+
+    if (!resume) {
+      return sendResponse(res, false, null, 'Resume not found.', 404);
+    }
+
+    return sendResponse(res, true, resume, 'Resume retrieved successfully.');
+  } catch (err) {
+    console.error('[Get Saved Resume By Id Error]', err);
+    return sendResponse(res, false, null, 'Internal server error.', 500);
+  }
+};
+
+export const updateResumeManually = async (req: Request, res: Response) => {
+  try {
+    const user_id = req.user?.user_id;
+    if (!user_id) {
+      return sendResponse(res, false, null, 'Unauthorized', 401);
+    }
+
+    const { jr_id, jr_resume_obj } = req.body;
+
+    if (!jr_id || !jr_resume_obj) {
+      return sendResponse(res, false, null, 'Both jr_id and jr_resume_obj are required.', 400);
+    }
+
+    // Find jobseeker_id for the user
+    const jobseeker = await prisma.jobseeker.findUnique({
+      where: { jobseeker_user_id: user_id },
+      select: { jobseeker_id: true },
+    });
+
+    if (!jobseeker) {
+      return sendResponse(res, false, null, 'Jobseeker not found.', 404);
+    }
+
+    // Update the resume
+    const updatedResume = await prisma.jobseeker_resumes.updateMany({
+      where: {
+        jr_id: Number(jr_id),
+        jobseeker_id: jobseeker.jobseeker_id,
+      },
+      data: {
+        jr_resume_obj: jr_resume_obj,
+        updated_at: new Date(),
+        updated_by: user_id.toString(),
+      },
+    });
+
+    if (updatedResume.count === 0) {
+      return sendResponse(res, false, null, 'Resume not found or not updated.', 404);
+    }
+
+    return sendResponse(res, true, null, 'Resume updated successfully.');
+  } catch (err) {
+    console.error('[Update Resume Obj Error]', err);
+    return sendResponse(res, false, null, 'Internal server error.', 500);
+  }
+};
 
 

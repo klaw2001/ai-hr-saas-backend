@@ -23,8 +23,8 @@ model user {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  jobseeker jobseeker?
-  employer  employer?
+  jobseeker            jobseeker?
+  employer             employer?
   resumeai_prompt_logs resumeai_prompt_log[]
 }
 
@@ -136,13 +136,14 @@ model jobseeker {
   created_by        String?  @db.VarChar(255)
   updated_by        String?  @db.VarChar(255)
 
-  user             user               @relation(fields: [jobseeker_user_id], references: [user_id])
-  application      application[]
-  u_profile        u_profile[]
-  u_qualifications u_qualifications[]
-  jobs_shortlisted jobs_shortlisted[]
-  jobseeker_profile jobseeker_profile?
+  user                 user                  @relation(fields: [jobseeker_user_id], references: [user_id])
+  application          application[]
+  u_profile            u_profile[]
+  u_qualifications     u_qualifications[]
+  jobs_shortlisted     jobs_shortlisted[]
+  jobseeker_profile    jobseeker_profile?
   resumeai_prompt_logs resumeai_prompt_log[]
+  jobseeker_resumes    jobseeker_resumes[]
 }
 
 model jobseeker_profile {
@@ -367,6 +368,23 @@ model u_relocation_cities {
   @@unique([city_name, preference_id])
 }
 
+model jobseeker_resumes {
+  jr_id         Int    @id @default(autoincrement())
+  jobseeker_id  Int
+  jr_resume_obj String
+
+  jr_name String?
+  jr_score       Int?
+  jr_score_reason String?
+  is_active     Boolean  @default(true)
+  created_at    DateTime? @default(now())
+  updated_at    DateTime? @updatedAt
+  created_by    String?  @db.VarChar(255)
+  updated_by    String?  @db.VarChar(255)
+
+  jobseeker jobseeker @relation(fields: [jobseeker_id], references: [jobseeker_id])
+}
+
 // --------------------------- Enums -----------------------------------------------
 enum language_proficiency {
   beginner
@@ -411,7 +429,7 @@ model resumeai_prompt_log {
   prompt_text            String
   gpt_response           String?
   prompt_type            String? // e.g., "resume_section", "full_resume"
-  status                 String  @default("completed") // e.g., "pending", "completed", "error"
+  status                 String   @default("completed") // e.g., "pending", "completed", "error"
   model_used             String?
   error_message          String?
   resume_score           Int?
@@ -421,7 +439,7 @@ model resumeai_prompt_log {
   updated_at             DateTime @updatedAt
 
   // Relations
-  user      user      @relation(fields: [user_id], references: [user_id])
+  user      user       @relation(fields: [user_id], references: [user_id])
   jobseeker jobseeker? @relation(fields: [jobseeker_id], references: [jobseeker_id])
 
   @@index([user_id])

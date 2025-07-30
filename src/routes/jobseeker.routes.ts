@@ -22,6 +22,9 @@ import {
   resetJobseekerPassword,
   generateResumeArray,
   updateResumeObj,
+  getSavedResumes,
+  getSavedResumeById,
+  updateResumeManually,
 } from '../controllers/jobseeker.controller';
 
 const router = Router();
@@ -48,8 +51,12 @@ router.post('/profile/update-resume-section', updateResumeSection);
 router.post('/profile/download-resume', downloadResume);
 router.post('/profile/score-resume', scoreResume);
 router.post('/profile/save-resume', updateResumeObj);
+router.get('/profile/get-saved-resumes', getSavedResumes);
+router.get('/profile/get-saved-resume/:jr_id', getSavedResumeById);
+router.post('/profile/update-resume-manually', updateResumeManually);
 
 // ---------------------------------------Resume Routes-------------------------------------
+
 
 // Shortlist a job
 router.post('/shortlist', shortlistJob);
