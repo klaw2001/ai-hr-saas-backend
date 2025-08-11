@@ -25,9 +25,15 @@ import {
   getSavedResumes,
   getSavedResumeById,
   updateResumeManually,
+  getJobseekerDashboard,
+  getDashboardStats,
 } from '../controllers/jobseeker.controller';
 
 const router = Router();
+
+// Dashboard routes
+router.get('/dashboard', getJobseekerDashboard);
+router.get('/dashboard/stats', getDashboardStats);
 
 
 router.get('/applications', getJobseekerApplications);

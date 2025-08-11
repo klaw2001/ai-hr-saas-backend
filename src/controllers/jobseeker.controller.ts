@@ -7,6 +7,13 @@ import fs from "fs";
 import ejs from "ejs";
 import { Readable } from "stream";
 import { logResumeAIPrompt, updateResumeAIPromptLog } from '../services/resumeaiPromptLog.service';
+import {
+  generateDashboardData,
+  calculateProfileCompletionFromDB,
+  calculateApplicationSuccessRateFromDB,
+  getMonthlyApplications,
+  getTopAppliedCompanies
+} from '../helpers/jobseekerHelper';
 
 const prisma = new PrismaClient();
 const openai = new OpenAI({
@@ -1327,5 +1334,188 @@ export const updateResumeManually = async (req: Request, res: Response) => {
     return sendResponse(res, false, null, 'Internal server error.', 500);
   }
 };
+
+export const getJobseekerDashboard = async (req: Request, res: Response) => {
+  try {
+    const user_id = req.user?.user_id;
+    if (!user_id) {
+      return sendResponse(res, false, null, 'Unauthorized', 401);
+    }
+
+    // Find jobseeker_id for the user
+    const jobseeker = await prisma.jobseeker.findUnique({
+      where: { jobseeker_user_id: user_id },
+      select: { jobseeker_id: true },
+    });
+
+    if (!jobseeker) {
+      return sendResponse(res, false, null, 'Jobseeker not found.', 404);
+    }
+
+    const jobseeker_id = jobseeker.jobseeker_id;
+
+    // Get dashboard data in parallel for better performance
+    const [
+      appliedJobsCount,
+      shortlistedJobsCount,
+      shortlistedJobs,
+      recentApplications,
+      jobseekerProfile,
+      totalResumes
+    ] = await Promise.all([
+      // Count of applied jobs
+      prisma.application.count({
+        where: { 
+          application_jobseeker_id: jobseeker_id,
+          is_active: true
+        },
+      }),
+      
+      // Count of shortlisted jobs
+      prisma.jobs_shortlisted.count({
+        where: { 
+          jobseeker_id: jobseeker_id,
+          is_active: true
+        },
+      }),
+      
+      // Get shortlisted jobs with job details
+      prisma.jobs_shortlisted.findMany({
+        where: { 
+          jobseeker_id: jobseeker_id,
+          is_active: true
+        },
+        include: {
+          job: {
+            select: {
+              job_id: true,
+              job_title: true,
+              company_name: true,
+              job_location: true,
+              job_salary: true,
+              job_remote: true,
+            }
+          }
+        },
+        orderBy: { created_at: 'desc' },
+        take: 5, // Limit to recent 5
+      }),
+      
+      // Get recent applications for notifications
+      prisma.application.findMany({
+        where: { 
+          application_jobseeker_id: jobseeker_id,
+          is_active: true
+        },
+        include: {
+          job: {
+            select: {
+              job_id: true,
+              job_title: true,
+              company_name: true,
+              job_location: true,
+            }
+          }
+        },
+        orderBy: { applied_at: 'desc' },
+        take: 10, // Limit to recent 10
+      }),
+      
+      // Get jobseeker profile for additional data
+      prisma.jobseeker_profile.findUnique({
+        where: { jobseeker_id: jobseeker_id },
+        select: {
+          full_name: true,
+          job_title: true,
+          profile_logo: true,
+        }
+      }),
+      
+      // Count total resumes
+      prisma.jobseeker_resumes.count({
+        where: { 
+          jobseeker_id: jobseeker_id,
+          is_active: true
+        },
+      })
+    ]);
+
+    // Generate realistic dashboard data
+    const dashboardData = await generateDashboardData(
+      appliedJobsCount,
+      shortlistedJobsCount,
+      shortlistedJobs,
+      recentApplications,
+      jobseekerProfile,
+      totalResumes
+    );
+
+    return sendResponse(res, true, dashboardData, 'Dashboard data fetched successfully');
+  } catch (err) {
+    console.error('[Get Jobseeker Dashboard Error]', err);
+    return sendResponse(res, false, null, 'Internal server error.', 500);
+  }
+};
+
+export const getDashboardStats = async (req: Request, res: Response) => {
+  try {
+    const user_id = req.user?.user_id;
+    if (!user_id) {
+      return sendResponse(res, false, null, 'Unauthorized', 401);
+    }
+
+    // Find jobseeker_id for the user
+    const jobseeker = await prisma.jobseeker.findUnique({
+      where: { jobseeker_user_id: user_id },
+      select: { jobseeker_id: true },
+    });
+
+    if (!jobseeker) {
+      return sendResponse(res, false, null, 'Jobseeker not found.', 404);
+    }
+
+    const jobseeker_id = jobseeker.jobseeker_id;
+
+    // Get basic stats
+    const [appliedJobsCount, shortlistedJobsCount, totalResumes] = await Promise.all([
+      prisma.application.count({
+        where: { 
+          application_jobseeker_id: jobseeker_id,
+          is_active: true
+        },
+      }),
+      prisma.jobs_shortlisted.count({
+        where: { 
+          jobseeker_id: jobseeker_id,
+          is_active: true
+        },
+      }),
+      prisma.jobseeker_resumes.count({
+        where: { 
+          jobseeker_id: jobseeker_id,
+          is_active: true
+        },
+      })
+    ]);
+
+    // Calculate additional metrics
+    const stats = {
+      total_applications: appliedJobsCount,
+      total_shortlisted: shortlistedJobsCount,
+      total_resumes: totalResumes,
+      profile_completion: await calculateProfileCompletionFromDB(jobseeker_id),
+      application_success_rate: await calculateApplicationSuccessRateFromDB(jobseeker_id),
+      monthly_applications: await getMonthlyApplications(jobseeker_id),
+      top_applied_companies: await getTopAppliedCompanies(jobseeker_id)
+    };
+
+    return sendResponse(res, true, stats, 'Dashboard statistics fetched successfully');
+  } catch (err) {
+    console.error('[Get Dashboard Stats Error]', err);
+    return sendResponse(res, false, null, 'Internal server error.', 500);
+  }
+};
+
+
 
 
